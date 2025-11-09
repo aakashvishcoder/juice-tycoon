@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
+import { FRUITS } from '../data';
 
 export default function JuiceGlass({ glass, onDrop, onSubmit, index }) {
   const [shake, setShake] = useState(false);
 
-  const handleShake = () => {
-    setShake(true);
-    setTimeout(() => setShake(false), 500);
-  };
-
-  //shake
   useEffect(() => {
-    if (glass?.shake) handleShake();
+    if (glass?.shake) {
+      setShake(true);
+      const timer = setTimeout(() => setShake(false), 500);
+      return () => clearTimeout(timer);
+    }
   }, [glass?.shake]);
 
   if (!glass || !glass.fruits) {
@@ -25,7 +24,7 @@ export default function JuiceGlass({ glass, onDrop, onSubmit, index }) {
     );
   }
 
-  const juiceColor = glass.fruits[0]?.color || 'juice-brown';
+  const juiceColor = glass.fruits[0]?.color || "juice-brown";
   const juiceHeight = Math.min(100, 20 * glass.fruits.length);
 
   return (
@@ -46,4 +45,4 @@ export default function JuiceGlass({ glass, onDrop, onSubmit, index }) {
       </div>
     </div>
   );
-}
+};
