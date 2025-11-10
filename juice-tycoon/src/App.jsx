@@ -14,6 +14,7 @@ export default function App() {
   const [streak, setStreak] = useState(0);
   const [comboPoints, setComboPoints] = useState(0);
   const [showCombo, setShowCombo] = useState(false);
+  const [isProcessingDrop, setIsProcessingDrop] = useState(false); 
 
   const generateOrder = useCallback(() => {
     const recipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
@@ -41,38 +42,70 @@ export default function App() {
   };
 
   const handleDrop = (e, glassIndex) => {
+    //preventing overlap
+    if (isProcessingDrop) return;
+    setIsProcessingDrop(true);
+    
     e.preventDefault();
 
     const fruitData = e.dataTransfer.getData('text/plain');
-    if (!fruitData || !currentOrder) return;
+    if (!fruitData || !currentOrder) {
+      setIsProcessingDrop(false);
+      return;
+    }
 
     let fruit;
     try {
       fruit = JSON.parse(fruitData);
     } catch (err) {
       console.error("Failed to parse fruit:", err);
+      setIsProcessingDrop(false);
       return;
     }
 
-    //da pour effect
+    //checking the state continuously
+    const currentGlasses = [...juiceGlasses];
+    const glass = currentGlasses[glassIndex];
+    const currentCount = glass ? glass.fruits.length : 0;
+    const maxFruits = currentOrder.fruits.length;
+    
+    //no overfilling!!
+    if (currentCount >= maxFruits) {
+      playSound('error');
+      setIsProcessingDrop(false);
+      return;
+    }
+
+    //extra check for duplicate fruits
+    if (glass && glass.fruits.some(f => f.id === fruit.id)) {
+      playSound('error');
+      setIsProcessingDrop(false);
+      return;
+    }
+
+    //pouring animation
     const pour = document.createElement('div');
     pour.className = 'fixed text-2xl pointer-events-none animate-pour z-50';
     pour.style.left = `${e.clientX - 20}px`;
     pour.style.top = `${e.clientY - 20}px`;
     pour.textContent = fruit.emoji;
     document.body.appendChild(pour);
-    setTimeout(() => document.body.removeChild(pour), 800);
-
-    setJuiceGlasses(prev => {
-      const newGlasses = [...prev];
-      if (!newGlasses[glassIndex]) {
-        newGlasses[glassIndex] = { fruits: [] };
+    setTimeout(() => {
+      if (pour.parentNode) {
+        document.body.removeChild(pour);
       }
-      newGlasses[glassIndex].fruits.push(fruit);
-      return newGlasses;
-    });
+    }, 800);
+
+    //update the glass state
+    const newGlasses = [...juiceGlasses];
+    if (!newGlasses[glassIndex]) {
+      newGlasses[glassIndex] = { fruits: [] };
+    }
+    newGlasses[glassIndex].fruits.push(fruit);
+    setJuiceGlasses(newGlasses);
 
     playSound('pour');
+    setIsProcessingDrop(false);
   };
 
   const handleSubmit = (glassIndex) => {
@@ -93,6 +126,7 @@ export default function App() {
 
       if (newStreak >= 3) {
         const combo = Math.floor(points * 0.5);
+        setComboPoints(combo);
         setScore(s => s + combo);
         setShowCombo(true);
         setTimeout(() => setShowCombo(false), 2000);
@@ -104,13 +138,17 @@ export default function App() {
     } else {
       setTimeLeft(t => Math.max(0, t - 5));
       playSound('error');
+      //shake animation (need to debug)
       setJuiceGlasses(prev => {
         const copy = [...prev];
-        if (copy[glassIndex]) copy[glassIndex] = { ...copy[glassIndex], shake: true };
+        if (copy[glassIndex]) {
+          copy[glassIndex] = { ...copy[glassIndex], shake: true };
+        }
         return copy;
       });
     }
 
+    //cleaning the glasses
     setJuiceGlasses(prev => {
       const copy = [...prev];
       copy[glassIndex] = null;
@@ -152,7 +190,7 @@ export default function App() {
         <h1 className="text-3xl md:text-4xl font-bold drop-shadow">Juice Tycoon</h1>
         <div className="flex gap-4">
           <div className="bg-black bg-opacity-40 px-4 py-2 rounded-full">
-            Score : <span className="font-bold text-yellow-300">{score}</span>
+            Score: <span className="font-bold text-yellow-300">{score}</span>
           </div>
           <div className="bg-black bg-opacity-40 px-4 py-2 rounded-full">
             Time: <span className={`font-bold ${timeLeft < 10 ? 'text-red-400' : 'text-green-300'}`}>{timeLeft}s</span>
@@ -189,7 +227,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="bg-black bg-opacity-30 rounded-2xl flex-1 flex flex-col">
+        <div className="bg-black bg-opacity-30 rounded-2xl p-4 flex-1 flex flex-col">
           <h2 className="text-xl font-bold mb-4">Juice Station</h2>
           <div className="flex justify-center gap-6 mb-6">
             {juiceGlasses.map((glass, i) => (
@@ -227,11 +265,11 @@ export default function App() {
             <li>1. Drag fruits to juice glasses!</li>
             <li>2. Match the order exactly</li>
             <li>3. Click glass or "Serve" to submit</li>
-            <li>4. 3+ correct = combo points!</li>
+            <li>4. 3+ correct orders = combo points!</li>
             <li>5. Different customers = different bonuses!</li>
           </ul>
         </div>
       </div>
     </div>
   );
-};
+}
