@@ -18,7 +18,7 @@ export default function JuiceGlass({ glass, onDrop, onSubmit, index }) {
 
   const handleDrop = (e) => {
     e.preventDefault();
-    e.stopPropogation();
+    e.stopPropagation();
     onDrop(e, index);
   };
 
@@ -35,15 +35,15 @@ export default function JuiceGlass({ glass, onDrop, onSubmit, index }) {
     );
   }
 
-  const juiceColor = glass.fruits[0]?.color || 'juice-brown';
+  const juiceColor = glass.fruits[0]?.color || "juice-brown";
   const juiceHeight = Math.min(100, 25 * glass.fruits.length);
 
   return (
     <div
-      className={`w-16 h-28 border-4 boredr-amber-800 rounded-b-xl relative overflow-hidden cursor-pointer ${shake ? 'animate-shake' : ''} transform hover:scale-105 transition-transform duration-200`}
+      className={`w-16 h-28 border-4 border-amber-800 rounded-b-xl relative overflow-hidden cursor-pointer ${shake ? 'animate-shake' : ''} transform hover:scale-105 transition-transform duration-200`}
       onClick={() => onSubmit(index)}
-      onDragover={handleDragOver}
-      onDrop={handleDrop} 
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
     >
       <div
         className={`absolute bottom-0 w-full bg-${juiceColor} rounded-t-lg transition-all duration-500`}

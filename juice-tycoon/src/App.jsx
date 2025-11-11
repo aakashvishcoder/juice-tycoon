@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import JuiceGlass from './components/JuiceGlass';
 import OrderCard from './components/OrderCard';
 import { FRUITS, RECIPES, CUSTOMERS } from './data';
@@ -15,17 +15,42 @@ export default function App() {
   const [comboPoints, setComboPoints] = useState(0);
   const [showCombo, setShowCombo] = useState(false);
   const [isProcessingDrop, setIsProcessingDrop] = useState(false);
+  const [customerTimeLeft, setCustomerTimeLeft] = useState(0);
+  const customerTimerRef = useRef(null);
 
   const generateOrder = useCallback(() => {
+    // Clear existing customer timer
+    if (customerTimerRef.current) {
+      clearInterval(customerTimerRef.current);
+    }
+    
     const recipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
     const cust = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
     setCurrentOrder({ ...recipe, id: Date.now() });
     setCustomer(cust);
+    setCustomerTimeLeft(cust.timeLimit);
+    
+    // Start new customer timer
+    const timer = setInterval(() => {
+      setCustomerTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          customerTimerRef.current = null;
+          setScore(s => Math.max(0, s - cust.penalty));
+          playSound('error');
+          generateOrder();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    customerTimerRef.current = timer;
   }, []);
 
   useEffect(() => {
     generateOrder();
-    const timer = setInterval(() => {
+    const mainTimer = setInterval(() => {
       setTimeLeft(t => {
         if (t <= 1) {
           setGameActive(false);
@@ -34,7 +59,14 @@ export default function App() {
         return t - 1;
       });
     }, 1000);
-    return () => clearInterval(timer);
+    
+    // Cleanup both timers
+    return () => {
+      clearInterval(mainTimer);
+      if (customerTimerRef.current) {
+        clearInterval(customerTimerRef.current);
+      }
+    };
   }, [generateOrder]);
 
   const handleDragStart = (e, fruit) => {
@@ -110,7 +142,7 @@ export default function App() {
 
   const handleSubmit = (glassIndex) => {
     const glass = juiceGlasses[glassIndex];
-    if (!glass || glass.fruits.length === 0 || !currentOrder) {
+    if (!glass || glass.fruits.length === 0 || !currentOrder || !customer) {
       return;
     }
 
@@ -119,6 +151,12 @@ export default function App() {
     const isMatch = JSON.stringify(glassFruits) === JSON.stringify(orderFruits);
 
     if (isMatch) {
+      //clear customer timer
+      if (customerTimerRef.current) {
+        clearInterval(customerTimerRef.current);
+        customerTimerRef.current = null;
+      }
+
       const points = Math.round(currentOrder.points * customer.bonus);
       setScore(s => s + points);
       const newStreak = streak + 1;
@@ -163,6 +201,10 @@ export default function App() {
     setStreak(0);
     setShowCombo(false);
     setJuiceGlasses([null, null, null]);
+    if (customerTimerRef.current) {
+      clearInterval(customerTimerRef.current);
+      customerTimerRef.current = null;
+    }
     generateOrder();
   };
 
@@ -199,6 +241,10 @@ export default function App() {
             <div className="flex flex-wrap justify-center gap-3 mt-3 md:mt-0">
               <div className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full flex items-center">
                 <span className="text-white font-bold mr-2">SCORE:</span>
+                <span className="text-2xl font-bold text-amber-200">{score}</span>
+              </div>
+              <div className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full flex items-center">
+                <span className="text-white font-bold mr-2">TIME:</span>
                 <span className={`text-2xl font-bold ${timeLeft < 10 ? 'text-red-300 animate-pulse' : 'text-green-300'}`}>
                   {timeLeft}s
                 </span>
@@ -217,6 +263,29 @@ export default function App() {
       {showCombo && (
         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold text-xl px-6 py-3 rounded-full shadow-2xl z-50 animate-bounce">
           🎉 COMBO! +{comboPoints} POINTS! 🎉
+        </div>
+      )}
+
+      {customer && (
+        <div className="max-w-6xl mx-auto mb-4">
+          <div className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full flex items-center justify-center mx-auto w-fit">
+            <span className="text-white font-bold mr-2">ORDER:</span>
+            <div className="w-20 h-2 bg-gray-300 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-1000 ${
+                  customerTimeLeft <= 3 ? 'bg-red-500' : 
+                  customerTimeLeft <= 7 ? 'bg-orange-500' : 'bg-green-400'
+                }`}
+                style={{ width: `${(customerTimeLeft / customer.timeLimit) * 100}%` }}
+              />
+            </div>
+            <span className={`ml-2 text-sm font-bold ${
+              customerTimeLeft <= 3 ? 'text-red-300' : 
+              customerTimeLeft <= 7 ? 'text-orange-300' : 'text-green-300'
+            }`}>
+              {customerTimeLeft}s
+            </span>
+          </div>
         </div>
       )}
 
@@ -275,7 +344,11 @@ export default function App() {
             <h3 className="text-lg font-bold text-amber-800 mb-2 flex items-center">
               <span className="text-xl mr-2">📋</span> CURRENT ORDER
             </h3>
-            <OrderCard order={currentOrder} customer={customer} />
+            <OrderCard 
+              order={currentOrder} 
+              customer={customer} 
+              timeLeft={customerTimeLeft}
+            />
           </div>
         </div>
 

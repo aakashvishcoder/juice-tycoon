@@ -1,16 +1,25 @@
 import React from 'react';
 import { FRUITS } from '../data';
 
-export default function OrderCard({ order, customer }) {
+export default function OrderCard({ order, customer, timeLeft }) {
   if (!order || !customer) return <div className="text-amber-600 text-center py-4">Getting order...</div>;
 
+  const getTimeColor = () => {
+    if (timeLeft <= 3) return "text-red-500 font-bold animate-pulse";
+    if (timeLeft <= 7) return 'text-orange-500 font-bold';
+    return 'time-green-600';
+  };
+
   return (
-    <div className={`${customer.color} rounded-xl p-3 shadow-mb border-2 ${customer.id === 'critic' ? 'border-purple-500' : customer.id === 'hungry' ? 'border-yellow-500' : customer.id == 'rushed' ? 'border-blue-500' : 'border-gray-400'}`}>
+    <div className={`${customer.color} rounded-xl p-3 shadow-md border-2 ${customer.id === 'critic' ? 'border-purple-500' : customer.id === 'hungry' ? 'border-yellow-500' : customer.id === 'rushed' ? 'border-blue-500' : 'border-gray-400'}`}>
       <div className="flex items-center mb-2">
         <span className="text-2xl mr-2">{customer.emoji}</span>
         <div>
           <div className="font-bold text-amber-900 text-sm">{customer.name} CUSTOMER</div>
           <div className="text-xs text-amber-700">Bonus: ×{customer.bonus}</div>
+          <div className={`text-xs font-bold ${getTimeColor()}`}>
+            ⏱️ {timeLeft}s left • -{customer.penalty} pts if late
+          </div>
         </div>
       </div>
       <div className="font-bold text-amber-900 text-sm mb-2">"{order.name}"</div>
