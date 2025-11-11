@@ -5,6 +5,10 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        'fredoka': ['Fredoka', 'sans-serif'],
+        'press-start': ['"Press Start 2P"', 'cursive']
+      },
       colors: {
         'juice-orange': '#FF8C42',
         'juice-green': "#4CAF50",
@@ -15,9 +19,10 @@ export default {
         'juice-brown': "#795548",
       },
       animation: {
-        pour: 'pour 0.8s ease-out forwards',
-        shake: 'shake 0.5s ease-in-out',
-        'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+        'pour': 'pour 0.8s ease-out forwards',
+        'shake': 'shake 0.5s ease-in-out',
+        'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'bounce': 'bounce 1s infinite',
       },
       keyframes: {
         pour: {
