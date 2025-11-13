@@ -14,6 +14,7 @@ export default function App() {
   const [streak, setStreak] = useState(0);
   const [comboPoints, setComboPoints] = useState(0);
   const [showCombo, setShowCombo] = useState(false);
+  const [showPenalty, setShowPenalty] = useState(null); 
   const [isProcessingDrop, setIsProcessingDrop] = useState(false);
   const [isProcessingSubmit, setIsProcessingSubmit] = useState(false);
   const [customerTimeLeft, setCustomerTimeLeft] = useState(0);
@@ -29,19 +30,22 @@ export default function App() {
       gameTime: 90,
       customerTimeMultiplier: 1.5,
       penaltyMultiplier: 0.5,
-      recipeComplexity: 'simple'
+      recipeComplexity: 'simple',
+      wrongOrderPenalty: 5 
     },
     medium: {
       gameTime: 60,
       customerTimeMultiplier: 1,
       penaltyMultiplier: 1,
-      recipeComplexity: 'normal'
+      recipeComplexity: 'normal',
+      wrongOrderPenalty: 10
     },
     hard: {
       gameTime: 45,
       customerTimeMultiplier: 0.7,
       penaltyMultiplier: 1.5,
-      recipeComplexity: 'complex'
+      recipeComplexity: 'complex',
+      wrongOrderPenalty: 15
     }
   };
 
@@ -117,8 +121,10 @@ export default function App() {
             clearInterval(customerTimerRef.current);
             customerTimerRef.current = null;
           }
-          setScore(s => Math.max(0, s - modifiedCust.penalty));
+          const penalty = modifiedCust.penalty;
+          setScore(s => Math.max(0, s - penalty));
           playSound('error');
+          setStreak(0);
           generateOrder();
           return 0;
         }
@@ -133,12 +139,11 @@ export default function App() {
     if (mainTimerRef.current) {
       clearInterval(mainTimerRef.current);
     }
-
     if (customerTimerRef.current) {
       clearInterval(customerTimerRef.current);
       customerTimerRef.current = null;
     }
-
+    
     setTimeLeft(DIFFICULTY_SETTINGS[difficulty].gameTime);
     
     const mainTimer = setInterval(() => {
@@ -224,7 +229,7 @@ export default function App() {
     setIsProcessingSubmit(true);
     
     const glass = juiceGlasses[glassIndex];
-    if (!glass || glass.fruits.length === 0 || !currentOrder || !customer) {
+    if (!glass || !glass.fruits || glass.fruits.length === 0 || !currentOrder || !customer) {
       setIsProcessingSubmit(false);
       return;
     }
@@ -240,43 +245,60 @@ export default function App() {
       }
 
       const points = Math.round(currentOrder.points * customer.bonus);
-      setScore(s => s + points);
       const newStreak = streak + 1;
       setStreak(newStreak);
-
-      if (score === 0) {
-        unlockAchievement('first_order');
-      }
       
-      if (score + points >= 100 && !unlockedAchievements.has('score_100')) {
-        unlockAchievement('score_100');
-      }
-      
-      if (newStreak >= 5 && !unlockedAchievements.has('streak_5')) {
-        unlockAchievement('streak_5');
-      }
-      
-      if (customer.id === 'critic' && !unlockedAchievements.has('critic_please')) {
-        unlockAchievement('critic_please');
-      }
-
+      let additionalComboPoints = 0;
       if (newStreak >= 3) {
-        const combo = Math.floor(points * 0.5);
-        setComboPoints(combo);
-        setScore(s => s + combo);
+        additionalComboPoints = Math.floor(points * 0.5);
         comboCountRef.current += 1;
+      }
+
+      const totalPoints = points + additionalComboPoints;
+      setScore(prevScore => {
+        const newScore = prevScore + totalPoints;
+        return isNaN(newScore) ? 0 : newScore; 
+      });
+      
+      if (newStreak >= 3) {
+        setComboPoints(additionalComboPoints);
         setShowCombo(true);
         setTimeout(() => setShowCombo(false), 2000);
         playSound('combo');
-        
+      }
+
+      setTimeout(() => {
+        if (score === 0) {
+          unlockAchievement('first_order');
+        }
+        if (score < 100 && (score + totalPoints) >= 100) {
+          unlockAchievement('score_100');
+        }
+        if (newStreak >= 5 && !unlockedAchievements.has('streak_5')) {
+          unlockAchievement('streak_5');
+        }
+        if (customer.id === 'critic' && !unlockedAchievements.has('critic_please')) {
+          unlockAchievement('critic_please');
+        }
         if (comboCountRef.current >= 3 && !unlockedAchievements.has('combo_king')) {
           unlockAchievement('combo_king');
         }
-      }
+      }, 0);
 
       playSound('success');
       generateOrder();
     } else {
+      const penalty = DIFFICULTY_SETTINGS[difficulty].wrongOrderPenalty;
+      setScore(prevScore => {
+        const newScore = Math.max(0, prevScore - penalty);
+        return isNaN(newScore) ? 0 : newScore;
+      });
+
+      setShowPenalty(penalty);
+      setTimeout(() => setShowPenalty(null), 2000);
+      
+      setStreak(0);
+      
       if (customerTimerRef.current) {
         clearInterval(customerTimerRef.current);
         customerTimerRef.current = null;
@@ -312,6 +334,7 @@ export default function App() {
     setGameActive(true);
     setStreak(0);
     setShowCombo(false);
+    setShowPenalty(null);
     setJuiceGlasses([null, null, null]);
     setUnlockedAchievements(new Set());
     comboCountRef.current = 0;
@@ -335,7 +358,7 @@ export default function App() {
           <p className="text-lg font-bold text-white mb-1">
             Difficulty: <span className="text-amber-300 capitalize">{difficulty}</span>
           </p>
-          <p className="text-xl font-bold text-white mb-1">Final Score: <span className="text-amber-900">{score}</span></p>
+          <p className="text-xl font-bold text-white mb-1">Final Score: <span className="text-amber-900">{isNaN(score) ? 0 : score}</span></p>
           <p className="text-lg font-bold text-white mb-6">Streak: {streak}</p>
           <button
             onClick={resetGame}
@@ -353,12 +376,29 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 p-2 font-fredoka">
+      {/* Achievement Toast */}
       {showAchievement && (
         <div className="fixed top-4 right-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-bold px-6 py-4 rounded-xl shadow-2xl z-50 transform animate-fade-in-up">
           <div className="text-2xl mb-1">{showAchievement.icon}</div>
           <div className="text-lg">{showAchievement.name}</div>
           <div className="text-sm opacity-90">{showAchievement.desc}</div>
           <div className="text-xs mt-1 text-yellow-100">+{showAchievement.points} PTS</div>
+        </div>
+      )}
+
+      {/* Wrong Order Penalty Toast */}
+      {showPenalty && (
+        <div className="fixed top-4 left-4 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold px-6 py-4 rounded-xl shadow-2xl z-50 transform animate-fade-in-up">
+          <div className="text-2xl mb-1">❌</div>
+          <div className="text-lg">Wrong Order!</div>
+          <div className="text-sm opacity-90">Penalty: -{showPenalty} points</div>
+        </div>
+      )}
+
+      {/* Combo Toast */}
+      {showCombo && (
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold text-xl px-6 py-3 rounded-full shadow-2xl z-50 animate-bounce">
+          🎉 COMBO! +{comboPoints} POINTS! 🎉
         </div>
       )}
 
@@ -396,7 +436,7 @@ export default function App() {
             <div className="flex flex-wrap justify-center gap-3">
               <div className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full flex items-center">
                 <span className="text-white font-bold mr-2">SCORE:</span>
-                <span className="text-2xl font-bold text-amber-200">{score}</span>
+                <span className="text-2xl font-bold text-amber-200">{isNaN(score) ? 0 : score}</span>
               </div>
               <div className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full flex items-center">
                 <span className="text-white font-bold mr-2">TIME:</span>
@@ -415,12 +455,6 @@ export default function App() {
         </div>
       </div>
 
-      {showCombo && (
-        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold text-xl px-6 py-3 rounded-full shadow-2xl z-50 animate-bounce">
-          🎉 COMBO! +{comboPoints} POINTS! 🎉
-        </div>
-      )}
-
       {customer && (
         <div className="max-w-6xl mx-auto mb-4">
           <div className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full flex items-center justify-center mx-auto w-fit">
@@ -431,7 +465,7 @@ export default function App() {
                   customerTimeLeft <= 3 ? 'bg-red-500' : 
                   customerTimeLeft <= 7 ? 'bg-orange-500' : 'bg-green-400'
                 }`}
-                style={{ width: `${(customerTimeLeft / customer.timeLimit) * 100}%` }}
+                style={{ width: `${(customerTimeLeft / (customer.timeLimit || 1)) * 100}%` }}
               />
             </div>
             <span className={`ml-2 text-sm font-bold ${
@@ -479,13 +513,13 @@ export default function App() {
                 />
                 <button
                   onClick={() => handleSubmit(i)}
-                  disabled={!glass || glass.fruits.length === 0 || isProcessingSubmit}
+                  disabled={!glass || !glass.fruits || glass.fruits.length === 0 || isProcessingSubmit}
                   className="mt-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 text-white text-sm font-bold py-1.5 px-4 rounded-full transition-all duration-200 disabled:cursor-not-allowed shadow-md"
                 >
                   SERVE
                 </button>
                 <div className="text-xs mt-1 text-center min-h-5">
-                  {glass && (
+                  {glass && glass.fruits && (
                     <span className={glass.fruits.length > (currentOrder?.fruits.length || 0) ? 'text-red-500 font-bold' : 'text-amber-700'}>
                       {glass.fruits.length}/{currentOrder?.fruits.length || '?'}
                     </span>
@@ -503,6 +537,7 @@ export default function App() {
               order={currentOrder} 
               customer={customer} 
               timeLeft={customerTimeLeft}
+              originalTimeLimit={customer?.timeLimit}
             />
           </div>
         </div>
@@ -530,7 +565,7 @@ export default function App() {
             </li>
             <li className="flex items-start">
               <span className="text-amber-600 mr-2">5.</span>
-              <span>Watch customer bonuses!</span>
+              <span>Wrong orders lose points!</span>
             </li>
           </ul>
 

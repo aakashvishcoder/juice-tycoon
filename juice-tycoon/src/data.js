@@ -20,7 +20,7 @@ export const RECIPES = [
     { fruits: ['grape'], name: 'Grape Juice', points: 15 },
     { fruits: ['strawberry'], name: 'Strawberry Juice', points: 15 },
     { fruits: ['apple', 'orange'], name: 'Citrus Blend', points: 25 },
-    { fruits: ['apple', 'grape'], name: 'Fruit Punch', ppoints: 25 },
+    { fruits: ['apple', 'grape'], name: 'Fruit Punch', points: 25 },
     { fruits: ['banana', 'strawberry'], name: 'Strawberry Banana', points: 30 },
     { fruits: ['pineapple', 'mango'], name: 'Tropical Mix', points: 35 },
     { fruits: ['apple', 'orange', 'grape'], name: 'Fruit KICK', points: 50 },

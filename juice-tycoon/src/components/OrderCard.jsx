@@ -1,17 +1,20 @@
 import React from 'react';
 import { FRUITS } from '../data';
 
-export default function OrderCard({ order, customer, timeLeft }) {
+export default function OrderCard({ order, customer, timeLeft, originalTimeLimit }) {
   if (!order || !customer) return <div className="text-amber-600 text-center py-4">Getting order...</div>;
 
   const getTimeColor = () => {
     if (timeLeft <= 3) return "text-red-500 font-bold animate-pulse";
     if (timeLeft <= 7) return 'text-orange-500 font-bold';
-    return 'time-green-600';
+    return 'text-green-600'; 
   };
 
+  const timeLimit = originalTimeLimit || customer.timeLimit || 1;
+  const progressPercent = Math.max(0, Math.min(100, (timeLeft / timeLimit) * 100));
+
   return (
-    <div className={`${customer.color} rounded-xl p-3 shadow-md border-2 ${customer.id === 'critic' ? 'border-purple-500' : customer.id === 'hungry' ? 'border-yellow-500' : customer.id === 'rushed' ? 'border-blue-500' : 'border-gray-400'}`}>
+    <div className={`${customer.color} rounded-xl p-3 shadow-md border-2 ${customer.id === 'critic' ? 'border-purple-500' : customer.id === 'hungry' ? 'border-yellow-500' : customer.id === 'gymbro' ? 'border-blue-500' : 'border-gray-400'}`}>
       <div className="flex items-center mb-2">
         <span className="text-2xl mr-2">{customer.emoji}</span>
         <div>
@@ -35,8 +38,8 @@ export default function OrderCard({ order, customer, timeLeft }) {
         })}
       </div>
       <div className="mt-2 text-center font-bold text-amber-700 text-sm">
-        +{Math.round(order.points * customer.bonus)} PTS
+        +{Math.round(order.points * customer.bonus) || 0} PTS 
       </div>
     </div>
   );
-};
+}
