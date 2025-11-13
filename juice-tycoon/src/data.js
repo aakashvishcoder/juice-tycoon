@@ -65,3 +65,11 @@ export const CUSTOMERS = [
         penalty: 20,
     }
 ];
+
+export const ACHIEVEMENTS = [
+  { id: 'first_order', name: 'First Sip!', desc: 'Serve your first order', icon: '🥤', points: 10 },
+  { id: 'score_100', name: 'Juice Master', desc: 'Reach 100 points', icon: '🏆', points: 25 },
+  { id: 'streak_5', name: 'Perfect Run', desc: '5 orders in a row!', icon: '🔥', points: 50 },
+  { id: 'critic_please', name: 'Critic Approved', desc: 'Successfully serve a Critic', icon: '🧐', points: 30 },
+  { id: 'combo_king', name: 'Combo King', desc: 'Get 3 combos in one game', icon: '👑', points: 40 }
+];

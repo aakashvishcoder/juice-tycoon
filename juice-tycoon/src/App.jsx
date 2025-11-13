@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import JuiceGlass from './components/JuiceGlass';
 import OrderCard from './components/OrderCard';
-import { FRUITS, RECIPES, CUSTOMERS } from './data';
+import { FRUITS, RECIPES, CUSTOMERS, ACHIEVEMENTS } from './data';
 import { playSound } from './utils/sound';
 
 export default function App() {
@@ -16,27 +16,103 @@ export default function App() {
   const [showCombo, setShowCombo] = useState(false);
   const [isProcessingDrop, setIsProcessingDrop] = useState(false);
   const [customerTimeLeft, setCustomerTimeLeft] = useState(0);
+  const [difficulty, setDifficulty] = useState('medium');
+  const [unlockedAchievements, setUnlockedAchievements] = useState(new Set());
+  const [showAchievement, setShowAchievement] = useState(null);
   const customerTimerRef = useRef(null);
+  const comboCountRef = useRef(0);
+
+  const DIFFICULTY_SETTINGS = {
+    easy: {
+      gameTime: 90,
+      customerTimeMultiplier: 1.5,
+      penaltyMultiplier: 0.5,
+      recipeComplexity: 'simple'
+    },
+    medium: {
+      gameTime: 60,
+      customerTimeMultiplier: 1,
+      penaltyMultiplier: 1,
+      recipeComplexity: 'normal'
+    },
+    hard: {
+      gameTime: 45,
+      customerTimeMultiplier: 0.7,
+      penaltyMultiplier: 1.5,
+      recipeComplexity: 'complex'
+    }
+  };
+
+  const unlockAchievement = useCallback((achievementId) => {
+    if (unlockedAchievements.has(achievementId)) return;
+    
+    const achievement = ACHIEVEMENTS.find(a => a.id === achievementId);
+    if (achievement) {
+      setUnlockedAchievements(prev => new Set([...prev, achievementId]));
+      setScore(s => s + achievement.points);
+      setShowAchievement(achievement);
+      setTimeout(() => setShowAchievement(null), 3000);
+      playSound('achievement');
+    }
+  }, [unlockedAchievements]);
+
+  const createPourParticles = (x, y, emoji, count = 3) => {
+    for (let i = 0; i < count; i++) {
+      const particle = document.createElement('div');
+      particle.textContent = emoji;
+      particle.className = 'fixed animate-pour-particle';
+      
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 30 + Math.random() * 40;
+      const tx = Math.cos(angle) * distance;
+      const ty = Math.sin(angle) * distance + 30;
+      
+      particle.style.left = `${x}px`;
+      particle.style.top = `${y}px`;
+      particle.style.setProperty('--tx', `${tx}px`);
+      particle.style.setProperty('--ty', `${ty}px`);
+      
+      document.body.appendChild(particle);
+      
+      setTimeout(() => {
+        if (particle.parentNode) {
+          document.body.removeChild(particle);
+        }
+      }, 600);
+    }
+  };
 
   const generateOrder = useCallback(() => {
-    // Clear existing customer timer
     if (customerTimerRef.current) {
       clearInterval(customerTimerRef.current);
     }
     
-    const recipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
-    const cust = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
-    setCurrentOrder({ ...recipe, id: Date.now() });
-    setCustomer(cust);
-    setCustomerTimeLeft(cust.timeLimit);
+    let availableRecipes = RECIPES;
+    if (DIFFICULTY_SETTINGS[difficulty].recipeComplexity === 'simple') {
+      availableRecipes = RECIPES.filter(r => r.fruits.length <= 2);
+    } else if (DIFFICULTY_SETTINGS[difficulty].recipeComplexity === 'complex') {
+      availableRecipes = RECIPES.filter(r => r.fruits.length >= 2);
+    }
     
-    // Start new customer timer
+    const recipe = availableRecipes[Math.floor(Math.random() * availableRecipes.length)];
+    const cust = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
+    
+    const modifiedCust = {
+      ...cust,
+      timeLimit: Math.max(5, Math.floor(cust.timeLimit * DIFFICULTY_SETTINGS[difficulty].customerTimeMultiplier)),
+      penalty: Math.floor(cust.penalty * DIFFICULTY_SETTINGS[difficulty].penaltyMultiplier)
+    };
+    
+    setCurrentOrder({ ...recipe, id: Date.now() });
+    setCustomer(modifiedCust);
+    setCustomerTimeLeft(modifiedCust.timeLimit);
+    
     const timer = setInterval(() => {
       setCustomerTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timer);
           customerTimerRef.current = null;
-          setScore(s => Math.max(0, s - cust.penalty));
+          setScore(s => Math.max(0, s - modifiedCust.penalty));
           playSound('error');
           generateOrder();
           return 0;
@@ -46,7 +122,7 @@ export default function App() {
     }, 1000);
     
     customerTimerRef.current = timer;
-  }, []);
+  }, [difficulty]);
 
   useEffect(() => {
     generateOrder();
@@ -60,7 +136,6 @@ export default function App() {
       });
     }, 1000);
     
-    // Cleanup both timers
     return () => {
       clearInterval(mainTimer);
       if (customerTimerRef.current) {
@@ -74,7 +149,6 @@ export default function App() {
   };
 
   const handleDrop = (e, glassIndex) => {
-    //preventing overlap
     if (isProcessingDrop) return;
     setIsProcessingDrop(true);
     
@@ -95,40 +169,26 @@ export default function App() {
       return;
     }
 
-    //checking the state continuously
     const currentGlasses = [...juiceGlasses];
     const glass = currentGlasses[glassIndex];
     const currentCount = glass ? glass.fruits.length : 0;
     const maxFruits = currentOrder.fruits.length;
     
-    //no overfilling!!
     if (currentCount >= maxFruits) {
       playSound('error');
       setIsProcessingDrop(false);
       return;
     }
 
-    //extra check for duplicate fruits
     if (glass && glass.fruits.some(f => f.id === fruit.id)) {
       playSound('error');
       setIsProcessingDrop(false);
       return;
     }
 
-    //pouring animation
-    const pour = document.createElement('div');
-    pour.className = 'fixed text-2xl pointer-events-none animate-pour z-50';
-    pour.style.left = `${e.clientX - 20}px`;
-    pour.style.top = `${e.clientY - 20}px`;
-    pour.textContent = fruit.emoji;
-    document.body.appendChild(pour);
-    setTimeout(() => {
-      if (pour.parentNode) {
-        document.body.removeChild(pour);
-      }
-    }, 800);
+    // Create juice particles
+    createPourParticles(e.clientX - 20, e.clientY - 20, fruit.emoji);
 
-    //update the glass state
     const newGlasses = [...juiceGlasses];
     if (!newGlasses[glassIndex]) {
       newGlasses[glassIndex] = { fruits: [] };
@@ -151,7 +211,6 @@ export default function App() {
     const isMatch = JSON.stringify(glassFruits) === JSON.stringify(orderFruits);
 
     if (isMatch) {
-      //clear customer timer
       if (customerTimerRef.current) {
         clearInterval(customerTimerRef.current);
         customerTimerRef.current = null;
@@ -162,13 +221,39 @@ export default function App() {
       const newStreak = streak + 1;
       setStreak(newStreak);
 
+      // Achievement: First order
+      if (score === 0) {
+        unlockAchievement('first_order');
+      }
+      
+      // Achievement: Score 100
+      if (score + points >= 100 && !unlockedAchievements.has('score_100')) {
+        unlockAchievement('score_100');
+      }
+      
+      // Achievement: Streak 5
+      if (newStreak >= 5 && !unlockedAchievements.has('streak_5')) {
+        unlockAchievement('streak_5');
+      }
+      
+      // Achievement: Serve Critic
+      if (customer.id === 'critic' && !unlockedAchievements.has('critic_please')) {
+        unlockAchievement('critic_please');
+      }
+
       if (newStreak >= 3) {
         const combo = Math.floor(points * 0.5);
         setComboPoints(combo);
         setScore(s => s + combo);
+        comboCountRef.current += 1;
         setShowCombo(true);
         setTimeout(() => setShowCombo(false), 2000);
         playSound('combo');
+        
+        // Achievement: Combo King
+        if (comboCountRef.current >= 3 && !unlockedAchievements.has('combo_king')) {
+          unlockAchievement('combo_king');
+        }
       }
 
       playSound('success');
@@ -176,7 +261,6 @@ export default function App() {
     } else {
       setTimeLeft(t => Math.max(0, t - 5));
       playSound('error');
-      //shake animation (need to debug)
       setJuiceGlasses(prev => {
         const copy = [...prev];
         if (copy[glassIndex]) {
@@ -186,7 +270,6 @@ export default function App() {
       });
     }
 
-    //cleaning the glasses
     setJuiceGlasses(prev => {
       const copy = [...prev];
       copy[glassIndex] = null;
@@ -194,18 +277,25 @@ export default function App() {
     });
   };
 
-  const resetGame = () => {
+  const resetGameWithDifficulty = (newDifficulty) => {
+    setDifficulty(newDifficulty);
     setScore(0);
-    setTimeLeft(60);
+    setTimeLeft(DIFFICULTY_SETTINGS[newDifficulty].gameTime);
     setGameActive(true);
     setStreak(0);
     setShowCombo(false);
     setJuiceGlasses([null, null, null]);
+    setUnlockedAchievements(new Set());
+    comboCountRef.current = 0;
     if (customerTimerRef.current) {
       clearInterval(customerTimerRef.current);
       customerTimerRef.current = null;
     }
     generateOrder();
+  };
+
+  const resetGame = () => {
+    resetGameWithDifficulty(difficulty);
   };
 
   if (!gameActive) {
@@ -214,6 +304,9 @@ export default function App() {
         <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl border-4 border-amber-300">
           <div className="text-5xl mb-4">🍊</div>
           <h2 className="text-3xl font-bold text-white drop-shadow-lg mb-2">Game Over!</h2>
+          <p className="text-lg font-bold text-white mb-1">
+            Difficulty: <span className="text-amber-300 capitalize">{difficulty}</span>
+          </p>
           <p className="text-xl font-bold text-white mb-1">Final Score: <span className="text-amber-900">{score}</span></p>
           <p className="text-lg font-bold text-white mb-6">Streak: {streak}</p>
           <button
@@ -232,13 +325,49 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 p-2 font-fredoka">
+      {/* Achievement Toast */}
+      {showAchievement && (
+        <div className="fixed top-4 right-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-bold px-6 py-4 rounded-xl shadow-2xl z-50 transform animate-fade-in-up">
+          <div className="text-2xl mb-1">{showAchievement.icon}</div>
+          <div className="text-lg">{showAchievement.name}</div>
+          <div className="text-sm opacity-90">{showAchievement.desc}</div>
+          <div className="text-xs mt-1 text-yellow-100">+{showAchievement.points} PTS</div>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto mb-4">
         <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-4 shadow-lg border-4 border-amber-400">
-          <div className="flex flex-col md:flex-row justify-between items-center">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <h1 className="text-4xl md:text-5xl font-bold text-white drop-shadow-lg font-press-start text-center md:text-left">
               JUICE TYCOON
             </h1>
-            <div className="flex flex-wrap justify-center gap-3 mt-3 md:mt-0">
+            
+            {/* Difficulty Selector */}
+            <div className="flex flex-wrap gap-2">
+              {['easy', 'medium', 'hard'].map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    if (gameActive) {
+                      if (window.confirm('Change difficulty? Current game will restart.')) {
+                        resetGameWithDifficulty(mode);
+                      }
+                    } else {
+                      resetGameWithDifficulty(mode);
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-full text-sm font-bold capitalize transition-all ${
+                    difficulty === mode
+                      ? 'bg-white text-amber-600 shadow-md'
+                      : 'bg-amber-200 text-amber-800 hover:bg-amber-300'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex flex-wrap justify-center gap-3">
               <div className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full flex items-center">
                 <span className="text-white font-bold mr-2">SCORE:</span>
                 <span className="text-2xl font-bold text-amber-200">{score}</span>
