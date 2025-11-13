@@ -15,11 +15,13 @@ export default function App() {
   const [comboPoints, setComboPoints] = useState(0);
   const [showCombo, setShowCombo] = useState(false);
   const [isProcessingDrop, setIsProcessingDrop] = useState(false);
+  const [isProcessingSubmit, setIsProcessingSubmit] = useState(false);
   const [customerTimeLeft, setCustomerTimeLeft] = useState(0);
   const [difficulty, setDifficulty] = useState('medium');
   const [unlockedAchievements, setUnlockedAchievements] = useState(new Set());
   const [showAchievement, setShowAchievement] = useState(null);
   const customerTimerRef = useRef(null);
+  const mainTimerRef = useRef(null);
   const comboCountRef = useRef(0);
 
   const DIFFICULTY_SETTINGS = {
@@ -85,6 +87,7 @@ export default function App() {
   const generateOrder = useCallback(() => {
     if (customerTimerRef.current) {
       clearInterval(customerTimerRef.current);
+      customerTimerRef.current = null;
     }
     
     let availableRecipes = RECIPES;
@@ -110,8 +113,10 @@ export default function App() {
     const timer = setInterval(() => {
       setCustomerTimeLeft(prev => {
         if (prev <= 1) {
-          clearInterval(timer);
-          customerTimerRef.current = null;
+          if (customerTimerRef.current) {
+            clearInterval(customerTimerRef.current);
+            customerTimerRef.current = null;
+          }
           setScore(s => Math.max(0, s - modifiedCust.penalty));
           playSound('error');
           generateOrder();
@@ -125,31 +130,46 @@ export default function App() {
   }, [difficulty]);
 
   useEffect(() => {
-    generateOrder();
+    if (mainTimerRef.current) {
+      clearInterval(mainTimerRef.current);
+    }
+
+    if (customerTimerRef.current) {
+      clearInterval(customerTimerRef.current);
+      customerTimerRef.current = null;
+    }
+
+    setTimeLeft(DIFFICULTY_SETTINGS[difficulty].gameTime);
+    
     const mainTimer = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
           setGameActive(false);
           return 0;
         }
-        return t - 1;
+        return prev - 1;
       });
     }, 1000);
     
+    mainTimerRef.current = mainTimer;
+    generateOrder();
+    
     return () => {
-      clearInterval(mainTimer);
+      if (mainTimerRef.current) {
+        clearInterval(mainTimerRef.current);
+      }
       if (customerTimerRef.current) {
         clearInterval(customerTimerRef.current);
       }
     };
-  }, [generateOrder]);
+  }, [difficulty, generateOrder]);
 
   const handleDragStart = (e, fruit) => {
     e.dataTransfer.setData('text/plain', JSON.stringify(fruit));
   };
 
   const handleDrop = (e, glassIndex) => {
-    if (isProcessingDrop) return;
+    if (isProcessingDrop || isProcessingSubmit) return;
     setIsProcessingDrop(true);
     
     e.preventDefault();
@@ -186,7 +206,6 @@ export default function App() {
       return;
     }
 
-    // Create juice particles
     createPourParticles(e.clientX - 20, e.clientY - 20, fruit.emoji);
 
     const newGlasses = [...juiceGlasses];
@@ -201,8 +220,12 @@ export default function App() {
   };
 
   const handleSubmit = (glassIndex) => {
+    if (isProcessingSubmit) return;
+    setIsProcessingSubmit(true);
+    
     const glass = juiceGlasses[glassIndex];
     if (!glass || glass.fruits.length === 0 || !currentOrder || !customer) {
+      setIsProcessingSubmit(false);
       return;
     }
 
@@ -221,22 +244,18 @@ export default function App() {
       const newStreak = streak + 1;
       setStreak(newStreak);
 
-      // Achievement: First order
       if (score === 0) {
         unlockAchievement('first_order');
       }
       
-      // Achievement: Score 100
       if (score + points >= 100 && !unlockedAchievements.has('score_100')) {
         unlockAchievement('score_100');
       }
       
-      // Achievement: Streak 5
       if (newStreak >= 5 && !unlockedAchievements.has('streak_5')) {
         unlockAchievement('streak_5');
       }
       
-      // Achievement: Serve Critic
       if (customer.id === 'critic' && !unlockedAchievements.has('critic_please')) {
         unlockAchievement('critic_please');
       }
@@ -250,7 +269,6 @@ export default function App() {
         setTimeout(() => setShowCombo(false), 2000);
         playSound('combo');
         
-        // Achievement: Combo King
         if (comboCountRef.current >= 3 && !unlockedAchievements.has('combo_king')) {
           unlockAchievement('combo_king');
         }
@@ -259,8 +277,13 @@ export default function App() {
       playSound('success');
       generateOrder();
     } else {
-      setTimeLeft(t => Math.max(0, t - 5));
+      if (customerTimerRef.current) {
+        clearInterval(customerTimerRef.current);
+        customerTimerRef.current = null;
+      }
+      
       playSound('error');
+      
       setJuiceGlasses(prev => {
         const copy = [...prev];
         if (copy[glassIndex]) {
@@ -268,6 +291,8 @@ export default function App() {
         }
         return copy;
       });
+      
+      generateOrder();
     }
 
     setJuiceGlasses(prev => {
@@ -275,23 +300,26 @@ export default function App() {
       copy[glassIndex] = null;
       return copy;
     });
+    
+    setTimeout(() => {
+      setIsProcessingSubmit(false);
+    }, 300);
   };
 
   const resetGameWithDifficulty = (newDifficulty) => {
     setDifficulty(newDifficulty);
     setScore(0);
-    setTimeLeft(DIFFICULTY_SETTINGS[newDifficulty].gameTime);
     setGameActive(true);
     setStreak(0);
     setShowCombo(false);
     setJuiceGlasses([null, null, null]);
     setUnlockedAchievements(new Set());
     comboCountRef.current = 0;
+    setIsProcessingSubmit(false);
     if (customerTimerRef.current) {
       clearInterval(customerTimerRef.current);
       customerTimerRef.current = null;
     }
-    generateOrder();
   };
 
   const resetGame = () => {
@@ -325,7 +353,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 p-2 font-fredoka">
-      {/* Achievement Toast */}
       {showAchievement && (
         <div className="fixed top-4 right-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-bold px-6 py-4 rounded-xl shadow-2xl z-50 transform animate-fade-in-up">
           <div className="text-2xl mb-1">{showAchievement.icon}</div>
@@ -341,8 +368,7 @@ export default function App() {
             <h1 className="text-4xl md:text-5xl font-bold text-white drop-shadow-lg font-press-start text-center md:text-left">
               JUICE TYCOON
             </h1>
-            
-            {/* Difficulty Selector */}
+
             <div className="flex flex-wrap gap-2">
               {['easy', 'medium', 'hard'].map((mode) => (
                 <button
@@ -453,7 +479,7 @@ export default function App() {
                 />
                 <button
                   onClick={() => handleSubmit(i)}
-                  disabled={!glass || glass.fruits.length === 0}
+                  disabled={!glass || glass.fruits.length === 0 || isProcessingSubmit}
                   className="mt-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 text-white text-sm font-bold py-1.5 px-4 rounded-full transition-all duration-200 disabled:cursor-not-allowed shadow-md"
                 >
                   SERVE
