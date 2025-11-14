@@ -162,9 +162,11 @@ export default function App() {
     return () => {
       if (mainTimerRef.current) {
         clearInterval(mainTimerRef.current);
+        mainTimerRef.current = null;
       }
       if (customerTimerRef.current) {
         clearInterval(customerTimerRef.current);
+        customerTimerRef.current = null;
       }
     };
   }, [difficulty, generateOrder]);
@@ -339,10 +341,19 @@ export default function App() {
     setUnlockedAchievements(new Set());
     comboCountRef.current = 0;
     setIsProcessingSubmit(false);
+
     if (customerTimerRef.current) {
       clearInterval(customerTimerRef.current);
       customerTimerRef.current = null;
     }
+    if (mainTimerRef.current) {
+      clearInterval(mainTimerRef.current);
+      mainTimerRef.current = null;
+    }
+
+    setTimeout(() => {
+      generateOrder();
+    }, 0);
   };
 
   const resetGame = () => {
@@ -376,7 +387,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 p-2 font-fredoka">
-      {/* Achievement Toast */}
       {showAchievement && (
         <div className="fixed top-4 right-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-bold px-6 py-4 rounded-xl shadow-2xl z-50 transform animate-fade-in-up">
           <div className="text-2xl mb-1">{showAchievement.icon}</div>
@@ -386,7 +396,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Wrong Order Penalty Toast */}
       {showPenalty && (
         <div className="fixed top-4 left-4 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold px-6 py-4 rounded-xl shadow-2xl z-50 transform animate-fade-in-up">
           <div className="text-2xl mb-1">❌</div>
@@ -395,7 +404,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Combo Toast */}
       {showCombo && (
         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold text-xl px-6 py-3 rounded-full shadow-2xl z-50 animate-bounce">
           🎉 COMBO! +{comboPoints} POINTS! 🎉
